@@ -38,7 +38,7 @@ def separate_guitar(file_path: str) -> str:
 
     return job_info['result']['Output 1'], name
 
-def download(url: str,music_name: str ,output_dir: str = "stem - guitarra") -> str:
+def download_stem(url: str,music_name: str ,output_dir: str = "stem - guitarra") -> str:
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -57,4 +57,4 @@ def download(url: str,music_name: str ,output_dir: str = "stem - guitarra") -> s
 
 if __name__ == "__main__":
     url,name = separate_guitar(r'/root/projeto-dados/icd/MusicData/audios/Vundabar - ＂Alien Blues＂ (Official Video).mp3')
-    audio_path = download(url,name)
+    audio_path = download_stem(url,name)
