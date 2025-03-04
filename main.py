@@ -4,8 +4,9 @@ from downloader import download
 import pandas as pd
 
 def main():
-    infos,tracks = take_tracks("61J5C8CDCqTnK7Zxu72eDG")
-    df = create_dataset(infos)
+    playlist_id = "61J5C8CDCqTnK7Zxu72eDG"
+    infos,tracks = take_tracks(playlist_id)
+    df = create_dataset(playlist_id)
     video_url = buscar_videos_youtube(tracks)
     download(video_url)
 
