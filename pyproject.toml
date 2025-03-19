@@ -1,0 +1,15 @@
+[project]
+name = "musicdata"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11.10"
+dependencies = [
+    "librosa>=0.10.2.post1",
+    "musicai-sdk>=0.4.1",
+    "pandas>=2.2.3",
+    "python-dotenv>=1.0.1",
+    "selenium>=4.29.0",
+    "spotipy>=2.25.1",
+    "yt-dlp>=2025.2.19",
+]

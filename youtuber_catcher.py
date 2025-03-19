@@ -7,17 +7,19 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
 import urllib.parse
+import concurrent.futures
+from typing import List, Optional, Tuple
 
-def buscar_videos_youtube(nomes_videos: list) -> list:
+def buscar_unico_video(termo_busca: str) -> Optional[str]:
     """
-    Busca múltiplos vídeos no YouTube e retorna uma lista com os links dos primeiros resultados.
+    Busca um único vídeo no YouTube usando Selenium.
     
     Args:
-        nomes_videos (list): Lista com nomes dos vídeos a serem buscados
-    
+        termo_busca: Termo de busca para o vídeo (formato: 'nome_musica - nome_album')
+        
     Returns:
-        list: Lista de URLs dos primeiros vídeos encontrados para cada nome
-    """    
+        URL do vídeo encontrado ou None se não encontrado
+    """
     # Configurar opções do Chrome
     chrome_options = Options()
     chrome_options.add_argument("--no-sandbox")
@@ -25,76 +27,114 @@ def buscar_videos_youtube(nomes_videos: list) -> list:
     chrome_options.add_argument("--disable-extensions")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--headless")  # Executar em modo headless para maior eficiência
     
     # Inicializar o driver com as opções configuradas
     driver = webdriver.Chrome(options=chrome_options)
     
-    resultados = []
-    
     try:
-        # Aceitar cookies apenas uma vez no início
+        # Abrir o YouTube
         driver.get("https://www.youtube.com/")
+        
+        # Tentar aceitar cookies
         try:
-            WebDriverWait(driver, 5).until(
+            WebDriverWait(driver, 3).until(
                 EC.element_to_be_clickable((By.XPATH, "//button[contains(@aria-label, 'Accept')]"))
             ).click()
         except:
             pass  # Ignorar se não aparecer
-            
-        # Processar cada nome de vídeo
-        for nome_video in nomes_videos:
-            try:
-                # Abrir o YouTube
-                driver.get("https://www.youtube.com/")
-                
-                # Encontrar a caixa de pesquisa
-                search_box = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.NAME, "search_query"))
-                )
-                
-                # Inserir o termo de pesquisa e pressionar Enter
-                search_box.clear()
-                search_box.send_keys(nome_video)
-                search_box.send_keys(Keys.RETURN)
-                
-                # Esperar pelos resultados da pesquisa
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.ID, "contents"))
-                )
-                
-                # Pequena pausa para garantir que os resultados carreguem
-                time.sleep(2)
-                
-                # Encontrar o primeiro vídeo (não playlist, não shorts)
-                primeiro_video = WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "a#video-title"))
-                )
-                
-                # Obter o link do vídeo
-                video_url = primeiro_video.get_attribute("href")
-                resultados.append(video_url)
-                
-            except Exception as e:
-                print(f"Erro ao buscar vídeo '{nome_video}': {e}")
-                resultados.append(None)  # Adicionar None para manter a mesma ordem da lista original
-                
+        
+        # Encontrar a caixa de pesquisa
+        search_box = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.NAME, "search_query"))
+        )
+        
+        # Inserir o termo de pesquisa e pressionar Enter
+        search_box.clear()
+        search_box.send_keys(termo_busca)
+        search_box.send_keys(Keys.RETURN)
+        
+        # Esperar pelos resultados da pesquisa
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "contents"))
+        )
+        
+        # Pequena pausa para garantir que os resultados carreguem
+        time.sleep(2)
+        
+        # Encontrar o primeiro vídeo (não playlist, não shorts)
+        primeiro_video = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "a#video-title"))
+        )
+        
+        # Obter o link do vídeo
+        video_url = primeiro_video.get_attribute("href")
+        print(f"Encontrado vídeo para '{termo_busca}': {video_url}")
+        return video_url
+        
+    except Exception as e:
+        print(f"Erro ao buscar vídeo '{termo_busca}': {e}")
+        return None
+        
     finally:
         # Fechar o navegador
         driver.quit()
+
+def youtube_catcher(musicas_info: List[Tuple[str, str]], max_workers: int = 3) -> List[Optional[str]]:
+    """
+    Busca múltiplos vídeos no YouTube em paralelo usando Selenium.
+    
+    Args:
+        musicas_info: Lista de tuplas contendo (nome_da_musica, nome_do_artista)
+        max_workers: Número máximo de workers para paralelização
+    
+    Returns:
+        Lista de URLs dos vídeos encontrados para cada música
+    """
+    resultados = [None] * len(musicas_info)  # Inicializar lista com None
+    
+    # Formatar os termos de busca como "nome_musica - nome_artista"
+    termos_busca = [f"{nome_musica} - {nome_artista}" for nome_musica, nome_artista in musicas_info]
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Mapear a função de busca para cada termo formatado
+        futuros = {executor.submit(buscar_unico_video, termo): i for i, termo in enumerate(termos_busca)}
         
+        # Coletar os resultados na medida em que forem concluídos
+        for futuro in concurrent.futures.as_completed(futuros):
+            indice = futuros[futuro]
+            try:
+                resultado = futuro.result()
+                resultados[indice] = resultado
+                nome_musica, nome_artista = musicas_info[indice]
+                print(f"Concluída busca {indice+1}/{len(musicas_info)}: '{nome_musica} - {nome_artista}'")
+            except Exception as e:
+                print(f"Erro na busca {indice+1}: {e}")
+                resultados[indice] = None
+    
     return resultados
 
 # Exemplo de uso
 if __name__ == "__main__":
     # Solicitar entrada de nomes de vídeos separados por vírgula
-    entrada = input("Digite os nomes dos vídeos que deseja buscar (separados por vírgula): ")
-    nomes_dos_videos = [nome.strip() for nome in entrada.split(',')]
+    entrada = input("Digite os nomes das músicas e artistas (formato: 'música,artista;música2,artista2'): ")
+    pares = entrada.split(';')
+    musicas_info = []
     
-    links = buscar_videos_youtube(nomes_dos_videos)
+    for par in pares:
+        if ',' in par:
+            musica, artista = par.split(',', 1)
+            musicas_info.append((musica.strip(), artista.strip()))
     
-    # Exibir os resultados
-    for i, (nome, link) in enumerate(zip(nomes_dos_videos, links)):
-        if link:
-            print(f"{i+1}. '{nome}': {link}")
-        else:
-            print(f"{i+1}. '{nome}': Não foi possível encontrar o vídeo.")
+    if musicas_info:
+        links = youtube_catcher(musicas_info)
+        
+        # Exibir os resultados
+        for i, ((musica, artista), link) in enumerate(zip(musicas_info, links)):
+            termo = f"{musica} - {artista}"
+            if link:
+                print(f"{i+1}. '{termo}': {link}")
+            else:
+                print(f"{i+1}. '{termo}': Não foi possível encontrar o vídeo.")
+    else:
+        print("Nenhuma música e artista válidos foram fornecidos. Use o formato: 'música,artista;música2,artista2'")

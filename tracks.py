@@ -29,7 +29,11 @@ def take_tracks(playlist_id: str) -> list:
             # Evitar casos em que o track pode ser None (por exemplo, se foi removido)
             if track is None:
                 continue
-            tracks_list.append(f"{track.get('name')} - {track['artists'][0].get('name')}")
+                
+            # Obtém nome da música e nome do artista principal para a lista de busca
+            nome_musica = track.get('name')
+            nome_artista = track['artists'][0].get('name') if track.get('artists') else ""
+            tracks_list.append((nome_musica, nome_artista))
 
             # Coletar informações desejadas
             track_data = {
@@ -50,12 +54,12 @@ def take_tracks(playlist_id: str) -> list:
             results = sp.next(results)
         else:
             break
-
+    print(tracks_list)
     return tracks_info, tracks_list
 
 def create_dataset(playlist_id: str) -> pd.DataFrame:
     # Coleta as informações das faixas
-    tracks_info = take_tracks(playlist_id)
+    tracks_info, _ = take_tracks(playlist_id)
     # Cria um DataFrame a partir da lista de dicionários
     df = pd.DataFrame(tracks_info)
     return df
